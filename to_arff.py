@@ -4,6 +4,22 @@ import numpy as np
 import re
 
 
+  
+  
+def write_header(headerlist):
+    feature_cols = [
+        # 'Time', 'Mote', 'Seq', 'Version',
+        'Rank',
+        'DIS-UR', 'DIS-MR', 'DIS-US', 'DIS-MS',
+        'DIO-UR', 'DIO-MR', 'DIO-US', 'DIO-MS',
+        'DAO-R', 'DAO-S', 'DAOA-R', 'DAOA-S', 'dio_intcurrent', 'dio_counter']
+    # ['Time', 'Mote', 'Seq', 'Rank', 'Version', 'DIS-R', 'DIS-S', 'DIO-R', 'DIO-S', 'DAO-R', 'RPL-total-sent']
+    meta_cols = ['tx', 'rx', 'Attack']
+    for iter in range(10):
+            headerlist += feature_cols
+    headerlist += meta_cols
+    return headerlist
+
 def data_chunk_func(df, window_size, detect_period, attack_standard_idx, tx, rx):
     feature_cols = [
         # 'Time', 'Mote', 'Seq', 'Version',
@@ -54,10 +70,20 @@ def to_arff(relation_name, df):
         arff_str += ','.join(row.values) + "\n"
     return arff_str
 
+def to_csv_diy(df):
+    df = df.astype(str)
+    csv_str = f""
+    # for col in df.colums:
+    #     csv_str += ',' + str(col)
+    for i, row in df.iterrows():
+        csv_str += ','.join(row.values) + "\n"
+    return csv_str
 
-if __name__ == "__main__":
-    csv_dir = "D:/multi-trace/feature_data/flooding/"
+# if __name__ == "__main__":
+#     csv_dir = "/home/choiyu8/Documents/git/STACK_ITEA/multi-trace/applications/flooding-attack/test_230106/csv_files/"
+def to_arff_main(csv_dir):
     dfs = []
+    all_data = []
     # attack_types = ["diodrop", "none"]
     attack_types = ["all"]
     window_size = 10  # feature input chunk size
@@ -79,7 +105,7 @@ if __name__ == "__main__":
         # file_name = "D:/multi-trace/feature_data/flooding/"\
         #     "diodrop-tx0.80-rx0.90-00001-dt-1670587999643.csv"
         # relation_name = os.path.split(os.path.splitext(file_name)[0])[1]
-
+        print('file name:' , file_name)
         df = pd.read_csv(file_name)
         df = df.drop(columns=['Time', 'Mote', 'Seq', 'Version'])
 
@@ -91,5 +117,23 @@ if __name__ == "__main__":
 
     relation_name = attack_types[0] + "_" + "-".join(map(str, [window_size, detect_period, attack_standard_idx]))
     arff_str = to_arff(relation_name, pd.concat(dfs))
-    with open(relation_name+".arff", "w") as f:
+    relation_name_file = relation_name + '.arff'
+    with open(relation_name_file, 'w') as f:
         f.write(arff_str)
+
+    df_data = pd.concat(dfs)
+
+    csv_file = 'data-ws'+str(window_size)+'-dp'+str(detect_period)+'-asi'+str(attack_standard_idx)+'.csv'
+    csv_file2 = 'data-ws'+str(window_size)+'-dp'+str(detect_period)+'-asi'+str(attack_standard_idx)+'2.csv'
+    csv_str = to_csv_diy(pd.concat(dfs))
+    with open(csv_file, 'w') as f:
+        f.write(csv_str)
+
+    file = pd.read_csv(csv_file)
+    headerlist = []
+    headerlist = write_header(headerlist)
+
+    # converting data frame to csv
+    file.to_csv(csv_file2, header=headerlist, index=False)
+  
+    return os.path.abspath(csv_file2)

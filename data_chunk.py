@@ -2,71 +2,41 @@ import re
 import pandas as pd
 
 
-def data_chunk_func(simul_dirs):
-    window_size = 10  # feature input chunk size
-    detect_period = 5  # period to run detection
-    attack_standard_idx = 2  # Frame number to define as attack. More sensitive at bigger number.
-
-    feature_cols = ['Time', 'Mote', 
-                    'Seq', 'Rank', 'Version', 
-                    'DIS-UR', 'DIS-MR', 'DIS-US', 'DIS-MS',
-                    'DIO-UR', 'DIO-MR', 'DIO-US', 'DIO-MS',
-                    'DAO-R', 'DAO-S', 'DAOA-R', 'DAOA-S', 'dio_intcurrent', 'dio_counter']
+def data_chunk_func(df, simul_dir, window_size, detect_period, attack_standard_idx, tx, rx):
+    feature_cols = [
+        # 'Time', 'Mote', 'Seq', 'Version',
+        'Rank',
+        'DIS-UR', 'DIS-MR', 'DIS-US', 'DIS-MS',
+        'DIO-UR', 'DIO-MR', 'DIO-US', 'DIO-MS',
+        'DAO-R', 'DAO-S', 'DAOA-R', 'DAOA-S', 'dio_intcurrent', 'dio_counter']
     # ['Time', 'Mote', 'Seq', 'Rank', 'Version', 'DIS-R', 'DIS-S', 'DIO-R', 'DIO-S', 'DAO-R', 'RPL-total-sent']
-    meta_cols = ['Attack', 'Trxr']
-
-    # Feature engineering and data chunking
+    meta_cols = ['tx', 'rx', 'Attack']
     all_data = []
-    for si, simul_dir in enumerate(simul_dirs):
-        print(si+1, len(simul_dirs))
-        df = pd.read_csv(f'{simul_dir}/rpl-statistics.csv')
+    # Feature engineering and data chunking
 
-        # Get configs from simul name
-        m = re.search(r'trxr.*?(-|$)', simul_dir)
-        cfg_trxr = m.group().split("_")[1][:-1]
+    df_split = [None] * len(df.index)
+    datas = []
+    for row_idx in range(0, len(df.index)-window_size, detect_period):
+        df_perrow = []
+        for d in range(window_size):
+            i = row_idx + d
+            if df_split[i] is None:
+                df_split[i] = df.iloc[i:i+1, :]
 
-        # Permote processing
-        # if conopts.permote:
-        #     permote_col = ['Time',
-        #                 'DIS-UR', 'DIS-MR', 'DIS-US', 'DIS-MS', 
-        #                 'DIO-UR', 'DIO-MR', 'DIO-US', 'DIO-MS', 
-        #                 'DAO-R', 'DAO-S', 'DAOA-R', 'DAOA-S', 'dio_intcurrent','dio_counter']
-        #     # ['Time', 'DIS-R', 'DIS-S', 'DIO-R', 'DIO-S', 'DAO-R', 'RPL-total-sent']
-        #     for moteIdx in np.unique(df['Mote']):
-        #         _df_mote = df[df['Mote'] == moteIdx]
-        #         df_mote = _df_mote.copy()
-        #         for rowIdx in range(len(df_mote.index)):
-        #             if rowIdx != 0:
-        #                 for col in permote_col:
-        #                     df_mote[col].iloc[rowIdx] = _df_mote[col].iloc[rowIdx] - _df_mote[col].iloc[rowIdx -1]
+            df_el = df_split[i][feature_cols]
 
-        #         df[df['Mote'] == moteIdx] = df_mote
+            df_el.columns = [idx+str(d) for idx in df_el.columns]
+            df_el = df_el.reset_index(drop=True)
+            df_perrow.append(df_el)
 
-        df_split = [None] * len(df.index)
-        datas = []
-        for row_idx in range(0, len(df.index)-window_size, detect_period):
-            df_perrow = []
-            for d in range(window_size):
-                i = row_idx + d
-                if df_split[i] is None:
-                    df_split[i] = df.iloc[i:i+1, :]
+        df_metadata = pd.DataFrame([[tx, rx, df_split[row_idx + attack_standard_idx]['Attack'].item(),]],
+                                   columns=meta_cols)
+        df_perrow = pd.concat(df_perrow + [df_metadata], axis=1)
+        datas.append(df_perrow)
 
-                df_el = df_split[i][feature_cols]
+    pd.concat(datas)
 
-                df_el.columns = [idx+str(d) for idx in df_el.columns]
-                df_el = df_el.reset_index(drop=True)
-                df_perrow.append(df_el)
-
-                # if d == 0:
-                #     time_base = df_el['Time0'].iloc[0]
-                # df_el['Time'+str(d)] -= time_base
-
-            df_metadata = pd.DataFrame([[df_split[row_idx + attack_standard_idx]['Attack'].item(), cfg_trxr]], 
-                                       columns=meta_cols)
-            df_perrow = pd.concat(df_perrow + [df_metadata], axis=1)
-            datas.append(df_perrow)
-
-        all_data.append(pd.concat(datas))
+    all_data.append(pd.concat(datas))
 
     df_data = pd.concat(all_data)
     # csv_path = \
